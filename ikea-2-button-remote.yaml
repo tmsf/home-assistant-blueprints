@@ -1,0 +1,191 @@
+blueprint:
+  name: IKEA 2 button remote
+  description: 'Control lights and switches with an IKEA 2 button remote ,
+    for use with [ZHA](https://www.home-assistant.io/integrations/zha/).
+
+    Extends [Malte](https://community.home-assistant.io/u/Malte)''s [version](https://community.home-assistant.io/t/zha-ikea-four-button-remote-styrbar-for-lights-e2001-e2002/384482)
+    which is based on [SwerveShot](https://community.home-assistant.io/u/SwerveShot)''s [version](https://community.home-assistant.io/t/zha-ikea-four-button-remote-for-lights/347657)
+    which is based on the work of [frenck](https://community.home-assistant.io/u/frenck)
+    with the five button version.
+
+    Pressing the up button will turn on the lights at the last set brightness (unless
+    the force brightness is toggled on in the blueprint) and turn on selected switches.
+
+    Pressing the down button will turn the lights off again and turn off selected switches.
+
+    Pressing and holding the up/down buttons will change the brightness smoothly and
+    can be pressed and hold until the brightness is satisfactory.
+
+    The "left" and "right" buttons can be assigned to a short and long button press
+    action. This allows you to assign, e.g., a scene or anything else. Use the left
+    and right button events with care, as before the long press event is sent, the
+    "on" event gets triggered.
+
+    '
+  domain: automation
+  input:
+    remote:
+      name: Remote
+      description: IKEA remote to use
+      selector:
+        device:
+          integration: zha
+          manufacturer: IKEA of Sweden
+          model: RODRET Dimmer
+    switch:
+      name: Switch(es)
+      description: The switch(es) to control
+      selector:
+        target:
+            entity:
+                domain: switch
+    light:
+      name: Light(s)
+      description: The light(s) to control
+      selector:
+        target:
+          entity:
+            domain: light
+    force_brightness:
+      name: Force turn on brightness
+      description: Force the brightness to the set level below, when the "on" button
+        on the remote is pushed and lights turn on.
+      default: false
+      selector:
+        boolean: {}
+    brightness:
+      name: Brightness
+      description: Brightness of the light(s) when turning on
+      default: 100
+      selector:
+        number:
+          min: 0.0
+          max: 100.0
+          mode: slider
+          step: 1.0
+          unit_of_measurement: '%'
+    button_left_short:
+      name: Left button - short press
+      description: Action to run on short left button press
+      default: []
+      selector:
+        action: {}
+    button_left_long:
+      name: Left button - long press
+      description: Action to run on long left button press. Use with care, as before
+        the long press event is sent, the "on" event gets triggered.
+      default: []
+      selector:
+        action: {}
+    button_right_short:
+      name: Right button - short press
+      description: Action to run on short right button press
+      default: []
+      selector:
+        action: {}
+    button_right_long:
+      name: Right button - long press
+      description: Action to run on long right button press. Use with care, as before
+        the long press event is sent, the "on" event gets triggered.
+      default: []
+      selector:
+        action: {}
+  source_url: https://community.home-assistant.io/t/zha-ikea-four-button-remote-styrbar-for-lights-and-switches/395248
+mode: restart
+max_exceeded: silent
+variables:
+  force_brightness: !input 'force_brightness'
+trigger:
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input 'remote'
+action:
+- variables:
+    command: '{{ trigger.event.data.command }}'
+    cluster_id: '{{ trigger.event.data.cluster_id }}'
+    endpoint_id: '{{ trigger.event.data.endpoint_id }}'
+    args: '{{ trigger.event.data.args }}'
+- choose:
+  - conditions:
+    - '{{ command == ''on'' }}'
+    - '{{ cluster_id == 6 }}'
+    - '{{ endpoint_id == 1 }}'
+    sequence:
+    - choose:
+      - conditions: '{{ force_brightness }}'
+        sequence:
+        - service: light.turn_on
+          target: !input 'light'
+          data:
+            brightness_pct: !input 'brightness'
+        - service: switch.turn_on
+          target: !input 'switch'
+      default:
+      - service: light.turn_on
+        target: !input 'light'
+      - service: switch.turn_on
+        target: !input 'switch'
+  - conditions:
+    - '{{ command == ''off'' }}'
+    - '{{ cluster_id == 6 }}'
+    - '{{ endpoint_id == 1 }}'
+    sequence:
+    - service: light.turn_off
+      target: !input 'light'
+    - service: switch.turn_off
+      target: !input 'switch'
+  - conditions:
+    - '{{ command == ''move_with_on_off'' }}'
+    - '{{ cluster_id == 8 }}'
+    - '{{ endpoint_id == 1 }}'
+    - '{{ args == [0, 83] }}'
+    sequence:
+    - repeat:
+        count: 10
+        sequence:
+        - service: light.turn_on
+          target: !input 'light'
+          data:
+            brightness_step_pct: 10
+            transition: 1
+        - delay: 0.5
+  - conditions:
+    - '{{ command == ''move'' }}'
+    - '{{ cluster_id == 8 }}'
+    - '{{ endpoint_id == 1 }}'
+    - '{{ args == [1, 83] }}'
+    sequence:
+    - repeat:
+        count: 10
+        sequence:
+        - service: light.turn_on
+          target: !input 'light'
+          data:
+            brightness_step_pct: -10
+            transition: 1
+        - delay: 0.5
+  - conditions:
+    - '{{ command == ''press'' }}'
+    - '{{ cluster_id == 5 }}'
+    - '{{ endpoint_id == 1 }}'
+    - '{{ args == [257, 13, 0] }}'
+    sequence: !input 'button_left_short'
+  - conditions:
+    - '{{ command == ''hold'' }}'
+    - '{{ cluster_id == 5 }}'
+    - '{{ endpoint_id == 1 }}'
+    - '{{ args == [3329, 0] }}'
+    sequence: !input 'button_left_long'
+  - conditions:
+    - '{{ command == ''press'' }}'
+    - '{{ cluster_id == 5 }}'
+    - '{{ endpoint_id == 1 }}'
+    - '{{ args == [256, 13, 0] }}'
+    sequence: !input 'button_right_short'
+  - conditions:
+    - '{{ command == ''hold'' }}'
+    - '{{ cluster_id == 5 }}'
+    - '{{ endpoint_id == 1 }}'
+    - '{{ args == [3328, 0] }}'
+    sequence: !input 'button_right_long'
