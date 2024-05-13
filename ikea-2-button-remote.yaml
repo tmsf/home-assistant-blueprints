@@ -16,11 +16,6 @@ blueprint:
     Pressing and holding the up/down buttons will change the brightness smoothly and
     can be pressed and hold until the brightness is satisfactory.
 
-    The "left" and "right" buttons can be assigned to a short and long button press
-    action. This allows you to assign, e.g., a scene or anything else. Use the left
-    and right button events with care, as before the long press event is sent, the
-    "on" event gets triggered.
-
     '
   domain: automation
   input:
